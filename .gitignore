@@ -1,0 +1,4 @@
+.venv/
+.gitingore
+__pycache__/
+data/output/
