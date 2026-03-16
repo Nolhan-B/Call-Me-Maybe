@@ -1,7 +1,15 @@
-from src.parsing.parser import parse_args
+from src.parsing.parser import Parser
+from src.parsing.config import ConfigModel
 
 def main() -> None:
-    parse_args()
+    if not Parser.can_parse():
+        print("Invalid arguments")
+        return
+
+    pre_config = Parser.get_dict_config_from_args()
+    configModel = ConfigModel(**pre_config)
+
+    print(configModel)
 
 
 if __name__ == "__main__":

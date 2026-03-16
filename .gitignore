@@ -2,3 +2,4 @@
 .gitingore
 __pycache__/
 data/output/
+.idea
