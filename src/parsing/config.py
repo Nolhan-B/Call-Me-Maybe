@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field
 
 class ConfigModel(BaseModel):
 	fct_file: str = Field(default="data/input/functions_definition.json")
