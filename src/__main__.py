@@ -17,12 +17,17 @@ def main() -> None:
     with open(path_to_vocab, "r") as file:
         vocab = json.load(file)
 
-    id_to_token = {v: k for k, v in vocab.items()}
+    id_to_token = {value: key for key, value in vocab.items()}
 
-    for func in functions:
-        ids = model.encode(func.name)
-        tokens = [id_to_token[i] for i in ids[0].tolist()]
-        print(f"{func.name} -> {tokens}")
+    ids = model.encode("fn_add_numbers")
+    token = [id_to_token[i] for i in ids[0].tolist()]
+    for tokens in token:
+        print(tokens)
+
+    # for func in functions:
+    #     ids = model.encode(func.name)
+    #     tokens = [id_to_token[i] for i in ids[0].tolist()]
+    #     print(f"{func.name} -> {tokens}")
 
 if __name__ == "__main__":
     try:
