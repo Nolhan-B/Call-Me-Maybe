@@ -3,6 +3,7 @@ from llm_sdk import Small_LLM_Model
 from src.repositories import FunctionRepository, PromptRepository
 from src.parsing.parser import Parser
 from src.parsing.config import ConfigModel
+from src.decoder import ConstrainedDecoder
 
 
 def main() -> None:
@@ -19,15 +20,17 @@ def main() -> None:
 
     id_to_token = {value: key for key, value in vocab.items()}
 
-    ids = model.encode("fn_add_numbers")
-    token = [id_to_token[i] for i in ids[0].tolist()]
-    for tokens in token:
-        print(tokens)
+    decoder = ConstrainedDecoder(
+        model=model,
+        vocab=vocab,
+        id_to_token=id_to_token,
+        functions=functions
+    )
 
-    # for func in functions:
-    #     ids = model.encode(func.name)
-    #     tokens = [id_to_token[i] for i in ids[0].tolist()]
-    #     print(f"{func.name} -> {tokens}")
+    for prompt in prompts:
+        result = decoder.decode(prompt.prompt)
+        print(result)
+
 
 if __name__ == "__main__":
     try:
