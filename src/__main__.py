@@ -10,8 +10,15 @@ def main() -> None:
 
     config = ConfigModel(**Parser.get_dict_config_from_args())
     print(config)
-    functions = FunctionRepository(filepath=config.fct_file).get_all()
-    prompts = PromptRepository(filepath=config.input_file).get_all()
+    functions = [
+        f for f in FunctionRepository(filepath=config.fct_file).get_all()
+        if f is not None
+    ]
+
+    prompts = [
+        p for p in PromptRepository(filepath=config.input_file).get_all()
+        if p is not None
+    ]
     model = Small_LLM_Model()
     path_to_vocab = model.get_path_to_vocab_file()
 
@@ -27,9 +34,15 @@ def main() -> None:
         functions=functions
     )
 
+    res = []
+
     for prompt in prompts:
-        result = decoder.decode(prompt.prompt)
-        print(result)
+        current = decoder.decode(prompt.prompt)
+        print(current)
+        res.append(current)
+
+    with open(config.output_file, "w") as file:
+        json.dump(res, file, indent=4)
 
 
 if __name__ == "__main__":

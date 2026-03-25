@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Dict
+from typing import Dict, Any
 import math
 from llm_sdk import Small_LLM_Model
 from src.models import FunctionDefinition
@@ -35,7 +35,7 @@ class ConstrainedDecoder(BaseModel):
 
         return list(set(valid_ids))
 
-    def decode(self, prompt: str) -> dict:
+    def decode(self, prompt: str) -> Dict[str, Any]:
         """Génère le JSON complet pour un prompt."""
         functions_desc = "\n".join([
             f"- {f.name}: {f.description}"
@@ -44,7 +44,7 @@ class ConstrainedDecoder(BaseModel):
         full_prompt = (
             f"Functions:\n{functions_desc}\n\n"
             f"Question: {prompt}\n\n"
-            f"Answer in JSON: {{\"name\": \""
+            f"Output: "
         )
 
         generated_name = ""
@@ -74,7 +74,7 @@ class ConstrainedDecoder(BaseModel):
         numbers = self.extract_numbers_from_prompt(prompt)
         strings = self.extract_strings_from_prompt(prompt)
 
-        parameters = {}
+        parameters: Dict[str, Any] = {}
 
         param_prompt = full_prompt + generated_name + '", "parameters": {'
 
@@ -96,6 +96,7 @@ class ConstrainedDecoder(BaseModel):
                 parameters[param_name] = value
 
         return {
+            "prompt": prompt,
             "name": generated_name,
             "parameters": parameters
         }
@@ -114,15 +115,17 @@ class ConstrainedDecoder(BaseModel):
         }
 
         words = re.findall(r"[a-zA-Z]+", prompt)
-        words = [w.lower() for w in words if len(w) > 1 and w.lower() not in STOPWORDS]
+        words = [w.lower() for w in words
+                 if len(w) > 1 and w.lower() not in STOPWORDS]
 
-        # Heuristic: keep only last meaningful words (most likely arguments)
         if words:
             return words
 
         return []
 
-    def get_valid_tokens_for_number(self, generated_so_far: str, candidates: list[str]) -> list[int]:
+    def get_valid_tokens_for_nb(self,
+                                generated_so_far: str,
+                                candidates: list[str]) -> list[int]:
         valid_ids = []
 
         for number in candidates:
@@ -141,7 +144,9 @@ class ConstrainedDecoder(BaseModel):
 
         return list(set(valid_ids))
 
-    def get_valid_tokens_for_string(self, generated_so_far: str, candidates: list[str]) -> list[int]:
+    def get_valid_tokens_for_string(self,
+                                    generated_so_far: str,
+                                    candidates: list[str]) -> list[int]:
         valid_ids = []
 
         for word in candidates:
@@ -161,15 +166,15 @@ class ConstrainedDecoder(BaseModel):
         return list(set(valid_ids))
 
     def generate_number(self, full_prompt: str, candidates: list[str]) -> str:
-        generated_value = ""
+        generated = ""
 
         while True:
-            valid_ids = self.get_valid_tokens_for_number(generated_value, candidates)
+            valid_ids = self.get_valid_tokens_for_nb(generated, candidates)
 
             if not valid_ids:
                 break
 
-            current_text = full_prompt + generated_value
+            current_text = full_prompt + generated
             input_ids = self.model.encode(current_text)[0].tolist()
             logits = self.model.get_logits_from_input_ids(input_ids)
 
@@ -180,23 +185,23 @@ class ConstrainedDecoder(BaseModel):
             next_token_id = masked.index(max(masked))
             next_token_str = self.id_to_token[next_token_id]
 
-            generated_value += next_token_str
+            generated += next_token_str
 
-            if any(generated_value == n for n in candidates):
+            if any(generated == n for n in candidates):
                 break
 
-        return generated_value
+        return generated
 
     def generate_string(self, full_prompt: str, candidates: list[str]) -> str:
-        generated_value = ""
+        gene = ""
 
         while True:
-            valid_ids = self.get_valid_tokens_for_string(generated_value, candidates)
+            valid_ids = self.get_valid_tokens_for_string(gene, candidates)
 
             if not valid_ids:
                 break
 
-            current_text = full_prompt + generated_value
+            current_text = full_prompt + gene
             input_ids = self.model.encode(current_text)[0].tolist()
             logits = self.model.get_logits_from_input_ids(input_ids)
 
@@ -207,9 +212,9 @@ class ConstrainedDecoder(BaseModel):
             next_token_id = masked.index(max(masked))
             next_token_str = self.id_to_token[next_token_id]
 
-            generated_value += next_token_str
+            gene += next_token_str
 
-            if any(generated_value == w for w in candidates):
+            if any(gene == w for w in candidates):
                 break
 
-        return generated_value
+        return gene

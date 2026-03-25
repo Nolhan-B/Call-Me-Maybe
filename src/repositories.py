@@ -24,6 +24,7 @@ class FunctionRepository(BaseModel):
             print(f"Error: invalid structure: {e}")
             return []
 
+
 class PromptRepository(BaseModel):
     """Repository for prompt definitions."""
 

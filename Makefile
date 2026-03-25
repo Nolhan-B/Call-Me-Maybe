@@ -20,11 +20,11 @@ clean:
 	find . -name "*.pyc" -delete
 
 lint:
-	flake8 .
+	flake8 src/
 	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	flake8 .
+	flake8 src/
 	mypy . --strict
 
 .PHONY: install run debug clean lint lint-strict
