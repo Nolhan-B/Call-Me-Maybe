@@ -1,3 +1,4 @@
+import os
 import json
 from llm_sdk import Small_LLM_Model
 from src.repositories import FunctionRepository, PromptRepository
@@ -35,6 +36,8 @@ def main() -> None:
     )
 
     res = []
+
+    os.makedirs(os.path.dirname(config.output_file), exist_ok=True)
 
     for prompt in prompts:
         current = decoder.decode(prompt.prompt)

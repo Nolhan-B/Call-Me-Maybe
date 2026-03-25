@@ -12,8 +12,8 @@ class FunctionRepository(BaseModel):
         """Load and return all function definitions."""
         try:
             with open(self.filepath, "r") as file:
-                raw = json.load(file)
-            return [FunctionDefinition(**item) for item in raw]
+                raws = json.load(file)
+            return [FunctionDefinition(**item) for item in raws]
         except FileNotFoundError:
             print(f"Error: file not found ({self.filepath})")
             return []

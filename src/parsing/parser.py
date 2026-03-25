@@ -3,9 +3,20 @@ from typing import Dict
 
 
 class Parser:
+    """Utility class for parsing command-line arguments."""
 
     @staticmethod
     def get_dict_config_from_args() -> Dict[str, str]:
+        """Parse command-line arguments into a configuration dictionary.
+
+        Reads sys.argv and maps known flags to internal config keys.
+        Arguments are expected in pairs: --flag value.
+
+        Returns:
+            A dict with any of the following keys: 'fct_file',
+            'input_file', 'output_file', depending on which flags
+            were provided.
+        """
         args = sys.argv[1:]
         data = {}
 
