@@ -84,8 +84,11 @@ class ConstrainedDecoder(BaseModel):
             for f in self.functions
         ])
         full_prompt = (
+            "You are a function-calling assistant.\n"
+            "Given a user request, identify the correct function and extract ONLY "
+            "the argument values from the request.\n"
+            "Do NOT copy the full sentence as a value. Extract only the relevant part.\n"
             f"You are a function selector.\n\n"
-            f"Pick the most appropriate function name.\n\n"
             f"Available functions:\n{functions_desc}\n\n"
             f"Examples:\n"
             f"Question: What is the sum of 1 and 2?\n"
@@ -137,13 +140,17 @@ class ConstrainedDecoder(BaseModel):
 
         for param_name, param in function.parameters.items():
             crt_param_prompt = param_prompt + f'"{param_name}": "'
-            if param.type == "number":
+            if param.type in ("number", "integer"):
                 value = self.generate_number(
                     param_prompt + f'"{param_name}": ', numbers
                 )
+                print(f"DEBUG generate_number({param_name}) = '{value}', candidates={numbers}")
                 if value in numbers:
                     numbers.remove(value)
-                parameters[param_name] = float(value) if value else 0.0
+                if param.type == "number":
+                    parameters[param_name] = float(value) if value else 0.0
+                if param.type == "integer":
+                    parameters[param_name] = int(value) if value else 0
                 param_prompt += f'"{param_name}": {parameters[param_name]}, '
 
             elif param.type == "string":
@@ -182,10 +189,24 @@ class ConstrainedDecoder(BaseModel):
         Returns:
             List of quoted string contents, in order of appearance.
         """
+        # Cas "Format template: <tout le reste>"
+        template_match = re.findall(
+            r'[Ff]ormat template[:\s]+(.+)$', prompt
+        )
+        if template_match:
+            return [template_match[0].strip()]
+
+        # Guillemets doubles en priorité
         quoted = re.findall(r'"([^"]+)"', prompt)
         if not quoted:
             quoted = re.findall(r"'([^']+)'", prompt)
-        return quoted
+
+        # Chemins Unix et Windows non quotés
+        unix = re.findall(r'/[\w./\-]+', prompt)
+        windows = re.findall(r'[A-Za-z]:\\[\w\\.\-]+', prompt)
+        paths = unix + windows
+
+        return quoted + [p for p in paths if p not in quoted]
 
     def extract_word_strings(self, prompt: str) -> list[str]:
         """Extract individual non-stopword words from the prompt.
@@ -205,11 +226,17 @@ class ConstrainedDecoder(BaseModel):
             "what", "is", "the", "a", "an", "of", "in",
             "and", "greet", "reverse", "string", "replace",
             "all", "with", "function", "call", "using",
-            "substitute", "word"
+            "substitute", "word", "format", "template",
+            "read", "file", "at", "on", "run", "execute",
+            "query", "calculate", "compound", "interest",
         }
         words = re.findall(r"[a-zA-Z]+", prompt)
-        return [w for w in words
+        result = [w for w in words
                 if len(w) > 1 and w.lower() not in STOPWORDS]
+
+        # Encodings avec tiret : utf-8, latin-1, ascii, etc.
+        encodings = re.findall(r'[a-zA-Z][\w]*-\d+', prompt)
+        return result + [e for e in encodings if e not in result]
 
     def get_valid_tokens_for_nb(self,
                                 generated_so_far: str,
@@ -228,18 +255,15 @@ class ConstrainedDecoder(BaseModel):
         valid_ids = []
 
         for number in candidates:
-            if number.startswith(generated_so_far):
-                number_token_ids = self.model.encode(number)[0].tolist()
+            if not number.startswith(generated_so_far):
+                continue
 
-                already_encoded = (
-                    self.model.encode(generated_so_far)[0].tolist()
-                    if generated_so_far else []
-                )
+            number_token_ids = self.model.encode(number)[0].tolist()
+            pos = len(self.model.encode(generated_so_far)[0].tolist()) \
+                if generated_so_far else 0
 
-                pos = len(already_encoded)
-
-                if pos < len(number_token_ids):
-                    valid_ids.append(number_token_ids[pos])
+            if pos < len(number_token_ids):
+                valid_ids.append(number_token_ids[pos])
 
         return list(set(valid_ids))
 
@@ -259,16 +283,16 @@ class ConstrainedDecoder(BaseModel):
         """
         valid_ids = []
 
-        for word in candidates:
-            if not word.startswith(generated_so_far):
+        for number in candidates:
+            if not number.startswith(generated_so_far):
                 continue
 
-            word_token_ids = self.model.encode(word)[0].tolist()
+            number_token_ids = self.model.encode(number)[0].tolist()
             pos = len(self.model.encode(generated_so_far)[0].tolist()) \
                 if generated_so_far else 0
 
-            if pos < len(word_token_ids):
-                valid_ids.append(word_token_ids[pos])
+            if pos < len(number_token_ids):
+                valid_ids.append(number_token_ids[pos])
 
         return list(set(valid_ids))
 
@@ -289,9 +313,10 @@ class ConstrainedDecoder(BaseModel):
             The matched numeric string, or
             an empty string if no candidate matched.
         """
-        generated = ""
+        generated_ids: list[int] = []
 
         while True:
+            generated = self.model.decode(generated_ids) if generated_ids else ""
             valid_ids = self.get_valid_tokens_for_nb(generated, candidates)
 
             if not valid_ids:
@@ -306,14 +331,14 @@ class ConstrainedDecoder(BaseModel):
                 masked[token_id] = logits[token_id]
 
             next_token_id = masked.index(max(masked))
-            next_token_str = self.id_to_token[next_token_id]
-
-            generated += next_token_str
+            generated_ids.append(next_token_id)
+            generated = self.model.decode(generated_ids)
 
             if any(generated == n for n in candidates):
                 break
 
-        return generated
+        return self.model.decode(generated_ids) if generated_ids else ""
+        
 
     def generate_string(self, full_prompt: str, candidates: list[str]) -> str:
         """Generate a string value by constrained decoding
